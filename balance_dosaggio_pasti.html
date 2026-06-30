@@ -1287,7 +1287,7 @@ function buildFreqTable(){
   let html=`<div class="freq-table"><div class="freq-table-head"><div class="freq-th">Categoria</div>${daysOfWeek.map(d=>`<div class="freq-th">${d}</div>`).join('')}</div>`;
   FREQ_CATS.forEach(cat=>{
     html+=`<div class="freq-table-row"><div class="freq-cat-cell" style="border-left:3px solid ${cat.color};padding-left:9px;">${cat.label}<span class="freq-cat-target">target: ${cat.target}×</span></div>`;
-    dates.forEach(d=>{ const ds=isoStr(d); const data=logByDate[ds]; let hit=false; if(data){ FREQ_MEALS.forEach(m=>{ (data.meals&&data.meals[m]||[]).forEach(it=>{ if(it.cat===cat.key) hit=true; }); }); } const isOver=cat.over&&counts[cat.key]>cat.target&&hit; const col=isOver?'#FB7185':cat.color; html+=`<div class="freq-day-cell"><div class="freq-dot-table" style="${hit?`background:${col};box-shadow:0 0 5px ${col}88`:''}"></div></div>`; });
+    dates.forEach(d=>{ const ds=isoStr(d); const data=logByDate[ds]; let dayCount=0; if(data){ FREQ_MEALS.forEach(m=>{ const mealCats=new Set(); (data.meals&&data.meals[m]||[]).forEach(it=>{ if(it.cat===cat.key) mealCats.add(it.cat); }); dayCount+=mealCats.size; }); } const hit=dayCount>0; const isOver=cat.over&&counts[cat.key]>cat.target&&hit; const col=isOver?'#FB7185':cat.color; const label=dayCount>1?dayCount:''; html+=`<div class="freq-day-cell"><div class="freq-dot-table" style="${hit?`background:${col};box-shadow:0 0 5px ${col}88;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#0C1410;`:''}">${label}</div></div>`; });
     html+='</div>';
   });
   html+='</div>';
