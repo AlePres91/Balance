@@ -955,7 +955,7 @@ function renderMacros(){
   const remF=Math.max(0,TARGETS.f-tot.f), remFi=Math.max(0,TARGETS.fi-tot.fi);
   const fmt=(v,t,rem,id,rid)=>{
     document.getElementById(id).textContent=`${v.toFixed(1)}g`;
-    document.getElementById(rid).textContent=v>t?`+${(v-t).toFixed(1)}g OVER`:`rem. ${rem.toFixed(1)}g`;
+    document.getElementById(rid).textContent=v>t+1?`+${(v-t).toFixed(1)}g OVER`:`rem. ${rem.toFixed(1)}g`;
   };
   fmt(tot.p,TARGETS.p,remP,'tot-p','rem-p');
   fmt(tot.c,TARGETS.c,remC,'tot-c','rem-c');
@@ -967,7 +967,7 @@ function renderMacros(){
   function setBar(id,val,target,cls){
     const pct=Math.min(100,(val/target)*100);
     const el=document.getElementById(id); el.style.width=pct+'%'; el.className='bar-fill';
-    if(val>target) el.classList.add('over');
+    if(val>target+1) el.classList.add('over');
     else{ el.classList.add(cls); if(pct>=90) el.classList.add(`glow-${cls}`); }
   }
   setBar('bar-p',tot.p,TARGETS.p,'p'); setBar('bar-c',tot.c,TARGETS.c,'c');
