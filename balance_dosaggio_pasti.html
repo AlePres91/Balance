@@ -1201,13 +1201,20 @@ function addActivity(){
   const kcalRaw=parseFloat(document.getElementById('act-kcal-input').value);
   const kcal=(!isNaN(kcalRaw)&&kcalRaw>0)?kcalRaw:(ACT_DEFAULTS[type]||200);
   const d=getDayData(); d.activities=d.activities||[];
-  d.activities.push({type,label:ACT_LABELS[type]||type,kcal}); setDayData(d);
+  const existing=d.activities.find(a=>a.type===type);
+  if(existing){
+    existing.kcal+=kcal;
+    existing.count=(existing.count||1)+1;
+  } else {
+    d.activities.push({type,label:ACT_LABELS[type]||type,kcal,count:1});
+  }
+  setDayData(d);
   document.getElementById('act-kcal-input').value=''; renderActivities();
 }
 function renderActivities(){
   const d=getDayData(); const acts=d.activities||[];
   const log=document.getElementById('activity-log'); log.innerHTML=''; let total=0;
-  acts.forEach((act,idx)=>{ total+=act.kcal; const item=document.createElement('div'); item.className='activity-item'; item.innerHTML=`<span class="act-name">${esc(act.label)}</span><span class="act-kcal">${act.kcal} kcal</span><button class="act-del" onclick="removeActivity(${idx})">×</button>`; log.appendChild(item); });
+  acts.forEach((act,idx)=>{ total+=act.kcal; const item=document.createElement('div'); item.className='activity-item'; const countLabel=act.count>1?` ×${act.count}`:''; item.innerHTML=`<span class="act-name">${esc(act.label)}${countLabel}</span><span class="act-kcal">${act.kcal} kcal</span><button class="act-del" onclick="removeActivity(${idx})">×</button>`; log.appendChild(item); });
   document.getElementById('activity-total').textContent=acts.length?`Totale: ${total} kcal (informativo)`:'';
 }
 function removeActivity(idx){ const d=getDayData(); d.activities.splice(idx,1); setDayData(d); renderActivities(); }
