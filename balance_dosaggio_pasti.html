@@ -751,30 +751,46 @@ function lsSet(k,v){
 }
 
 /* ═══ BUILD MEAL FORMS ═══ */
+const CATS_ORDER = ['','pesce','carne_b','carne_r','affettati','legumi','formaggi','uova'];
+const CAT_NAMES = {'':'Altro / Verdure / Frutta','pesce':'🐟 Pesce','carne_b':'🍗 Carne bianca','carne_r':'🥩 Carne rossa','affettati':'🍖 Affettati','legumi':'🫘 Legumi','formaggi':'🧀 Formaggi','uova':'🥚 Uova'};
+
+function buildFoodOptionsHtml(meal, filterTerm){
+  const foods = MEAL_FOODS[meal]||[];
+  const customFoods = getCustomFoods();
+  const term = (filterTerm||'').toLowerCase().trim();
+  let optionsHtml = `<option value="">— scegli alimento —</option>`;
+  CATS_ORDER.forEach(cat=>{
+    let group = foods.filter(f=>f.cat===(cat));
+    let customGroup = customFoods.filter(f=>(f.cat||'')===(cat));
+    if(term){
+      group = group.filter(f=>f.name.toLowerCase().includes(term));
+      customGroup = customGroup.filter(f=>f.name.toLowerCase().includes(term));
+    }
+    const allGroup = [...group,...customGroup.map(f=>({...f,custom:true}))];
+    if(!allGroup.length) return;
+    optionsHtml+=`<optgroup label="${CAT_NAMES[cat]||cat}">`;
+    allGroup.forEach(f=>{
+      const data=JSON.stringify({p:f.p,c:f.c,f:f.f,fi:f.fi||0,cat:f.cat||'',ref:f.ref||100});
+      optionsHtml+=`<option value='${data.replace(/'/g,"&#39;")}'>${f.name}${f.custom?' ★':''}</option>`;
+    });
+    optionsHtml+=`</optgroup>`;
+  });
+  return optionsHtml;
+}
+
+function filterMealFoods(meal){
+  const term = document.getElementById(`fi-search-${meal}`).value;
+  const sel = document.getElementById(`fi-sel-${meal}`);
+  sel.innerHTML = buildFoodOptionsHtml(meal, term);
+  clearMacroFields(meal);
+}
+
 function buildMealForms(){
   const container = document.getElementById('meals-container');
   container.innerHTML = '';
   MEALS.forEach(meal=>{
     const isOpen = MEALS_OPEN.includes(meal);
-    const foods = MEAL_FOODS[meal]||[];
-    // build optgroups
-    const cats_order = ['','pesce','carne_b','carne_r','affettati','legumi','formaggi','uova'];
-    const cat_names = {'':'Altro / Verdure / Frutta','pesce':'🐟 Pesce','carne_b':'🍗 Carne bianca','carne_r':'🥩 Carne rossa','affettati':'🍖 Affettati','legumi':'🫘 Legumi','formaggi':'🧀 Formaggi','uova':'🥚 Uova'};
-    // also include custom foods for this meal
-    const customFoods = getCustomFoods();
-    let optionsHtml = `<option value="">— scegli alimento —</option>`;
-    cats_order.forEach(cat=>{
-      const group = foods.filter(f=>f.cat===(cat));
-      const customGroup = customFoods.filter(f=>(f.cat||'')===(cat));
-      const allGroup = [...group,...customGroup.map(f=>({...f,custom:true}))];
-      if(!allGroup.length) return;
-      optionsHtml+=`<optgroup label="${cat_names[cat]||cat}">`;
-      allGroup.forEach(f=>{
-        const data=JSON.stringify({p:f.p,c:f.c,f:f.f,fi:f.fi||0,cat:f.cat||'',ref:f.ref||100});
-        optionsHtml+=`<option value='${data.replace(/'/g,"&#39;")}'>${f.name}${f.custom?' ★':''}</option>`;
-      });
-      optionsHtml+=`</optgroup>`;
-    });
+    const optionsHtml = buildFoodOptionsHtml(meal, '');
     const div = document.createElement('div');
     div.id = `meal-${meal}`;
     div.className = 'card';
@@ -790,6 +806,7 @@ function buildMealForms(){
           <div class="add-food-row1">
             <div class="food-select-wrap">
               <label>Alimento</label>
+              <input type="text" id="fi-search-${meal}" placeholder="🔍 Cerca…" oninput="filterMealFoods('${meal}')" style="width:100%;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:6px 9px;font-size:12px;margin-bottom:4px;">
               <select class="food-select" id="fi-sel-${meal}" onchange="onFoodSelect('${meal}')">
                 ${optionsHtml}
               </select>
@@ -881,6 +898,9 @@ function addFood(meal){
   items.push({name,p,c,f,fi,g,cat});
   setMealItems(meal,items);
   // reset
+  const searchInput=document.getElementById(`fi-search-${meal}`);
+  if(searchInput) searchInput.value='';
+  document.getElementById(`fi-sel-${meal}`).innerHTML=buildFoodOptionsHtml(meal,'');
   document.getElementById(`fi-sel-${meal}`).value='';
   document.getElementById(`fi-g-${meal}`).value='100';
   clearMacroFields(meal);
