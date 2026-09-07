@@ -1086,8 +1086,16 @@ async function analyzePhoto(){
         {type:'text',text:'Analizza questa etichetta nutrizionale. Rispondi SOLO con JSON: {"nome":"nome prodotto","p":grammi proteina per 100g,"c":grammi carboidrati per 100g,"f":grammi grassi per 100g,"fi":grammi fibre per 100g}. Solo JSON, niente altro.'}
       ]}]})
     });
+    if(!resp.ok){
+      const errBody=await resp.text();
+      let msg=`HTTP ${resp.status}`;
+      try{ const errJson=JSON.parse(errBody); msg=errJson.error?.message||errJson.error||msg; }catch(_){ if(errBody) msg=errBody.substring(0,120); }
+      throw new Error(msg);
+    }
     const data=await resp.json();
+    if(data.error){ throw new Error(data.error.message||JSON.stringify(data.error)); }
     const text=data.content?.find(b=>b.type==='text')?.text||'';
+    if(!text) throw new Error('Risposta vuota dal modello');
     const parsed=JSON.parse(text.replace(/```json|```/g,'').trim());
     document.getElementById('cf-name').value=parsed.nome||'';
     document.getElementById('cf-p').value=parsed.p||'';
@@ -1095,7 +1103,7 @@ async function analyzePhoto(){
     document.getElementById('cf-f').value=parsed.f||'';
     document.getElementById('cf-fi').value=parsed.fi||'';
     status.textContent='✓ Estratto!'; status.style.color='var(--sage)';
-  }catch(e){ status.textContent='✗ Errore'; status.style.color='var(--over)'; console.error(e); }
+  }catch(e){ status.textContent='✗ '+e.message; status.style.color='var(--over)'; console.error(e); }
   input.value='';
 }
 function fileToBase64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
