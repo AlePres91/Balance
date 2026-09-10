@@ -476,6 +476,15 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
     </div>
   </div>
 </div>
+<div class="modal-backdrop hidden" id="move-modal-backdrop">
+  <div class="modal">
+    <h3>Sposta in…</h3>
+    <div id="move-modal-options" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+    <div class="modal-btns">
+      <button class="modal-btn cancel" onclick="closeMoveModal()">Annulla</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -915,6 +924,34 @@ function removeFood(meal,idx){
   renderMacros(); renderMeals(); renderFreqWeek();
 }
 
+function moveFood(fromMeal,idx,toMeal){
+  const fromItems=getMealItems(fromMeal);
+  const item=fromItems[idx]; if(!item) return;
+  fromItems.splice(idx,1); setMealItems(fromMeal,fromItems);
+  const toItems=getMealItems(toMeal);
+  toItems.push(item); setMealItems(toMeal,toItems);
+  renderMacros(); renderMeals(); renderFreqWeek();
+  showToast(`Spostato in ${MEAL_LABELS[toMeal]} ✓`);
+}
+
+let moveModalCtx=null;
+function openMoveModal(meal,idx){
+  moveModalCtx={meal,idx};
+  const optsDiv=document.getElementById('move-modal-options');
+  optsDiv.innerHTML='';
+  MEALS.filter(m=>m!==meal).forEach(m=>{
+    const btn=document.createElement('button');
+    btn.className='modal-btn confirm';
+    btn.style.textAlign='left';
+    btn.style.fontSize='14px';
+    btn.textContent=`${MEAL_ICONS[m]} ${MEAL_LABELS[m]}`;
+    btn.onclick=()=>{ moveFood(moveModalCtx.meal, moveModalCtx.idx, m); closeMoveModal(); };
+    optsDiv.appendChild(btn);
+  });
+  document.getElementById('move-modal-backdrop').classList.remove('hidden');
+}
+function closeMoveModal(){ document.getElementById('move-modal-backdrop').classList.add('hidden'); moveModalCtx=null; }
+
 /* ─── RENDER MEALS ─── */
 function renderMeals(){
   MEALS.forEach(meal=>{
@@ -936,6 +973,7 @@ function renderMeals(){
         ${catHtml}
         <input type="number" class="gram-input" value="${item.g||100}" min="1" step="1" title="Grammi" onchange="updateGrams('${meal}',${idx},this.value)">
         <span class="food-macros">P${(item.p||0).toFixed(1)} C${(item.c||0).toFixed(1)} G${(item.f||0).toFixed(1)} Fib${(item.fi||0).toFixed(1)}</span>
+        <button class="del-btn" style="color:var(--slate)" onclick="openMoveModal('${meal}',${idx})" title="Cambia pasto">✏️</button>
         <button class="del-btn" onclick="removeFood('${meal}',${idx})">×</button>
       `;
       log.appendChild(row);
