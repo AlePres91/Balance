@@ -672,6 +672,7 @@ const SYNC_URL = 'https://balance-sync.presenti-alessandro.workers.dev';
 const SYNC_KEY = 'Balance2026!';
 let syncTimeout = null;
 let syncStatus = 'idle'; // idle | syncing | ok | error
+let applyingRemote = false; // true mentre applichiamo dati pull, per non ritriggerare push
 
 function getSyncData(){
   const all = {};
@@ -680,12 +681,6 @@ function getSyncData(){
     if(k && k.startsWith('balance_')) all[k]=lsGet(k);
   }
   return all;
-}
-
-function applySyncData(data){
-  Object.keys(data).forEach(k=>{
-    if(k.startsWith('balance_')) lsSet(k, data[k]);
-  });
 }
 
 function setSyncIndicator(status){
@@ -721,6 +716,21 @@ async function pushSync(){
   }
 }
 
+// Push "best effort" che sopravvive alla chiusura della pagina (keepalive)
+function flushSyncOnExit(){
+  try{
+    const data = getSyncData();
+    fetch(SYNC_URL, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Auth-Key':SYNC_KEY},
+      body: JSON.stringify(data),
+      keepalive: true
+    });
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushSyncOnExit(); });
+window.addEventListener('pagehide', flushSyncOnExit);
+
 async function pullSync(){
   setSyncIndicator('syncing');
   try{
@@ -730,10 +740,16 @@ async function pullSync(){
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     if(data && Object.keys(data).length > 0){
-      // confronta timestamp: usa i dati più recenti per ogni chiave
-      Object.keys(data).forEach(k=>{
-        if(k.startsWith('balance_')) lsSet(k, data[k]);
-      });
+      const remoteTs = parseInt(data['balance_local_ts'])||0;
+      const localTs  = parseInt(localStorage.getItem('balance_local_ts'))||0;
+      if(remoteTs > localTs){
+        // il Worker ha dati più recenti di questo dispositivo: applica
+        applyingRemote = true;
+        Object.keys(data).forEach(k=>{ if(k.startsWith('balance_')) lsSet(k, data[k]); });
+        applyingRemote = false;
+      } else {
+        console.log('Pull ignorato: dati locali già aggiornati o più recenti del server.');
+      }
     }
     setSyncIndicator('ok');
     renderAll();
@@ -750,11 +766,11 @@ function scheduleSync(){
   syncTimeout = setTimeout(()=>{ pushSync(); }, 1500);
 }
 
-// Patch lsSet per triggerare sync automatica
-const _lsSetOrig = lsSet;
+// Patch lsSet per triggerare sync automatica e tracciare timestamp locale
 function lsSet(k,v){
   try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){}
-  if(k && k.startsWith('balance_day_') || k === 'balance_custom_foods' || k === 'balance_combos'){
+  if(!applyingRemote && (k && k.startsWith('balance_day_') || k === 'balance_custom_foods' || k === 'balance_combos')){
+    try{ localStorage.setItem('balance_local_ts', String(Date.now())); }catch(e){}
     scheduleSync();
   }
 }
@@ -1113,8 +1129,32 @@ function renderCustomFoods(searchTerm){
   });
 }
 
+function syncFoodInLogs(oldName,newName,newCat){
+  let count=0;
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k&&k.startsWith('balance_day_')){
+      const data=lsGet(k);
+      if(!data||!data.meals) continue;
+      let changed=false;
+      MEALS.forEach(m=>{
+        (data.meals[m]||[]).forEach(item=>{
+          if(item.name===oldName){
+            item.cat=newCat;
+            if(newName&&newName!==oldName) item.name=newName;
+            changed=true; count++;
+          }
+        });
+      });
+      if(changed) lsSet(k,data);
+    }
+  }
+  return count;
+}
+
 function editCustomFood(idx){
   const foods=getCustomFoods(); const food=foods[idx]; if(!food) return;
+  const originalName=food.name;
   // precompila i campi del form con i valori esistenti
   document.getElementById('cf-name').value=food.name||'';
   document.getElementById('cf-p').value=food.p||'';
@@ -1128,6 +1168,7 @@ function editCustomFood(idx){
   btn.textContent='Aggiorna';
   btn.onclick=()=>{
     const name=document.getElementById('cf-name').value.trim(); if(!name) return;
+    const newCat=document.getElementById('cf-cat').value||'';
     foods[idx]={
       name,
       p:parseFloat(document.getElementById('cf-p').value)||0,
@@ -1135,16 +1176,17 @@ function editCustomFood(idx){
       f:parseFloat(document.getElementById('cf-f').value)||0,
       fi:parseFloat(document.getElementById('cf-fi').value)||0,
       g:parseFloat(document.getElementById('cf-grams').value)||100,
-      cat:document.getElementById('cf-cat').value||''
+      cat:newCat
     };
     setCustomFoods(foods);
+    const updated=syncFoodInLogs(originalName,name,newCat);
     // ripristina bottone Salva
     btn.textContent='Salva';
     btn.onclick=saveCustomFood;
     ['cf-name','cf-p','cf-c','cf-f','cf-fi'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('cf-grams').value='100'; document.getElementById('cf-cat').value='';
-    renderCustomFoods(); buildMealForms(); renderMeals();
-    showToast('Alimento aggiornato ✓');
+    renderCustomFoods(); buildMealForms(); renderMeals(); renderFreqWeek();
+    showToast(updated>0?`Aggiornato + ${updated} occorrenza/e già loggata/e ✓`:'Alimento aggiornato ✓');
   };
   // scroll al form
   document.getElementById('cf-name').focus();
