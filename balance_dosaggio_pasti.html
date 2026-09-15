@@ -310,6 +310,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
     <div class="date-label" id="date-label"></div>
     <button onclick="changeDate(1)">›</button>
     <button class="today-btn" onclick="goToday()">Oggi</button>
+    <button class="today-btn" onclick="openCopyDayModal()" title="Copia l'intera giornata su un'altra data">📋 Copia giorno</button>
   </div>
 
   <div class="macro-summary">
@@ -482,6 +483,17 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
     <div id="move-modal-options" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
     <div class="modal-btns">
       <button class="modal-btn cancel" onclick="closeMoveModal()">Annulla</button>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop hidden" id="copy-modal-backdrop">
+  <div class="modal">
+    <h3 id="copy-modal-title">Copia su…</h3>
+    <p style="margin:0 0 8px;">Scegli la data di destinazione:</p>
+    <input type="date" id="copy-modal-date" style="width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:8px 10px;font-size:14px;margin-bottom:14px;">
+    <div class="modal-btns">
+      <button class="modal-btn cancel" onclick="closeCopyModal()">Annulla</button>
+      <button class="modal-btn confirm" onclick="confirmCopy()">Copia</button>
     </div>
   </div>
 </div>
@@ -823,6 +835,7 @@ function buildMealForms(){
       <div class="card-head ${isOpen?'open':''}" onclick="toggleCard('${meal}')">
         <h2>${MEAL_ICONS[meal]} ${MEAL_LABELS[meal]}</h2>
         <span class="meal-sub" id="msub-${meal}"></span>
+        <button title="Copia questo pasto su un'altra data" onclick="event.stopPropagation();openCopyMealModal('${meal}')" style="background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:13px;padding:2px 4px;">📋</button>
         <span class="chevron">▾</span>
       </div>
       <div class="card-body${isOpen?'':' hidden'}" id="body-${meal}">
@@ -967,6 +980,56 @@ function openMoveModal(meal,idx){
   document.getElementById('move-modal-backdrop').classList.remove('hidden');
 }
 function closeMoveModal(){ document.getElementById('move-modal-backdrop').classList.add('hidden'); moveModalCtx=null; }
+
+let copyModalCtx=null; // {type:'meal',meal} oppure {type:'day'}
+
+function openCopyMealModal(meal){
+  copyModalCtx={type:'meal',meal};
+  document.getElementById('copy-modal-title').textContent=`Copia "${MEAL_LABELS[meal]}" su…`;
+  document.getElementById('copy-modal-date').value=addDays(currentDate,1);
+  document.getElementById('copy-modal-backdrop').classList.remove('hidden');
+}
+
+function openCopyDayModal(){
+  copyModalCtx={type:'day'};
+  document.getElementById('copy-modal-title').textContent=`Copia l'intera giornata su…`;
+  document.getElementById('copy-modal-date').value=addDays(currentDate,1);
+  document.getElementById('copy-modal-backdrop').classList.remove('hidden');
+}
+
+function closeCopyModal(){ document.getElementById('copy-modal-backdrop').classList.add('hidden'); copyModalCtx=null; }
+
+function confirmCopy(){
+  const targetDate=document.getElementById('copy-modal-date').value;
+  if(!targetDate){ showToast('Seleziona una data'); return; }
+  if(targetDate===currentDate){ showToast('Scegli una data diversa da quella visualizzata'); return; }
+  if(!copyModalCtx) return;
+
+  if(copyModalCtx.type==='meal'){
+    const meal=copyModalCtx.meal;
+    const items=getMealItems(meal);
+    if(!items.length){ showToast('Nessun alimento da copiare in questo pasto'); closeCopyModal(); return; }
+    const destData=getDayData(targetDate);
+    destData.meals[meal]=[...(destData.meals[meal]||[]), ...items.map(it=>({...it}))];
+    setDayData(destData,targetDate);
+    showToast(`"${MEAL_LABELS[meal]}" copiato su ${formatDateIT(targetDate)} ✓`);
+  } else if(copyModalCtx.type==='day'){
+    const srcData=getDayData(currentDate);
+    const hasAny=srcData.meals&&Object.values(srcData.meals).some(arr=>arr&&arr.length);
+    if(!hasAny){ showToast('Nessun pasto da copiare in questa giornata'); closeCopyModal(); return; }
+    const destData=getDayData(targetDate);
+    MEALS.forEach(m=>{
+      const srcItems=srcData.meals[m]||[];
+      if(srcItems.length){
+        destData.meals[m]=[...(destData.meals[m]||[]), ...srcItems.map(it=>({...it}))];
+      }
+    });
+    setDayData(destData,targetDate);
+    showToast(`Giornata copiata su ${formatDateIT(targetDate)} ✓`);
+  }
+  closeCopyModal();
+  renderFreqWeek();
+}
 
 /* ─── RENDER MEALS ─── */
 function renderMeals(){
