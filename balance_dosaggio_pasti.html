@@ -981,7 +981,15 @@ function openMoveModal(meal,idx){
 }
 function closeMoveModal(){ document.getElementById('move-modal-backdrop').classList.add('hidden'); moveModalCtx=null; }
 
-let copyModalCtx=null; // {type:'meal',meal} oppure {type:'day'}
+let copyModalCtx=null; // {type:'meal',meal} oppure {type:'day'} oppure {type:'item',meal,idx}
+
+function openCopyItemModal(meal,idx){
+  const item=getMealItems(meal)[idx]; if(!item) return;
+  copyModalCtx={type:'item',meal,idx};
+  document.getElementById('copy-modal-title').textContent=`Copia "${item.name}" su…`;
+  document.getElementById('copy-modal-date').value=addDays(currentDate,1);
+  document.getElementById('copy-modal-backdrop').classList.remove('hidden');
+}
 
 function openCopyMealModal(meal){
   copyModalCtx={type:'meal',meal};
@@ -1005,7 +1013,15 @@ function confirmCopy(){
   if(targetDate===currentDate){ showToast('Scegli una data diversa da quella visualizzata'); return; }
   if(!copyModalCtx) return;
 
-  if(copyModalCtx.type==='meal'){
+  if(copyModalCtx.type==='item'){
+    const {meal,idx}=copyModalCtx;
+    const item=getMealItems(meal)[idx];
+    if(!item){ showToast('Alimento non trovato'); closeCopyModal(); return; }
+    const destData=getDayData(targetDate);
+    destData.meals[meal]=[...(destData.meals[meal]||[]), {...item}];
+    setDayData(destData,targetDate);
+    showToast(`"${item.name}" copiato su ${formatDateIT(targetDate)} ✓`);
+  } else if(copyModalCtx.type==='meal'){
     const meal=copyModalCtx.meal;
     const items=getMealItems(meal);
     if(!items.length){ showToast('Nessun alimento da copiare in questo pasto'); closeCopyModal(); return; }
@@ -1053,6 +1069,7 @@ function renderMeals(){
         <input type="number" class="gram-input" value="${item.g||100}" min="1" step="1" title="Grammi" onchange="updateGrams('${meal}',${idx},this.value)">
         <span class="food-macros">P${(item.p||0).toFixed(1)} C${(item.c||0).toFixed(1)} G${(item.f||0).toFixed(1)} Fib${(item.fi||0).toFixed(1)}</span>
         <button class="del-btn" style="color:var(--slate)" onclick="openMoveModal('${meal}',${idx})" title="Cambia pasto">✏️</button>
+        <button class="del-btn" style="color:var(--gold)" onclick="openCopyItemModal('${meal}',${idx})" title="Copia su un'altra data">⧉</button>
         <button class="del-btn" onclick="removeFood('${meal}',${idx})">×</button>
       `;
       log.appendChild(row);
