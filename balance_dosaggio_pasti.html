@@ -303,7 +303,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 
 <div id="viewOggi">
 <div class="wrap">
-  <p style="font-size:11px;color:var(--ink-soft);margin:8px 0 12px;text-align:right;">Target: 172g P · 197g C · 59g G · 30g Fib · ~2000 kcal</p>
+  <p style="font-size:11px;color:var(--ink-soft);margin:8px 0 4px;text-align:right;" id="target-line">Target: 172g P · 197g C · 59g G · 30g Fib · ~2000 kcal</p>
+  <p style="font-size:11px;color:var(--gold);margin:0 0 12px;text-align:right;" id="bonus-line"></p>
 
   <div class="date-nav">
     <button onclick="changeDate(-1)">‹</button>
@@ -637,6 +638,33 @@ const MEALS = ['colazione','spuntino1','pranzo','spuntino2','cena'];
 const MEAL_LABELS = {colazione:'Colazione',spuntino1:'Spuntino mattina',pranzo:'Pranzo',spuntino2:'Spuntino pomeriggio',cena:'Cena'};
 const MEAL_ICONS  = {colazione:'☀️',spuntino1:'🍎',pranzo:'🍽️',spuntino2:'🍊',cena:'🌙'};
 const MEALS_OPEN  = ['colazione','pranzo','cena'];
+
+/* ═══ TARGET DINAMICO (bonus attività) ═══
+   75% delle kcal attività loggate viene "restituito" come target extra,
+   diviso 70% carbo / 30% proteine. Grassi e fibre restano fissi.
+   Calcolato al volo, mai salvato — non tocca lo storico. */
+const ACTIVITY_RECOVERY_PCT = 0.75;
+const ACTIVITY_CARB_SHARE   = 0.70;
+const ACTIVITY_PROTEIN_SHARE= 0.30;
+
+function getDynamicTargets(date){
+  const d=getDayData(date);
+  const activityKcal=(d.activities||[]).reduce((s,a)=>s+a.kcal,0);
+  const bonusKcal = activityKcal*ACTIVITY_RECOVERY_PCT;
+  const bonusCarbG = (bonusKcal*ACTIVITY_CARB_SHARE)/4;
+  const bonusProteinG = (bonusKcal*ACTIVITY_PROTEIN_SHARE)/4;
+  return {
+    p: TARGETS.p+bonusProteinG,
+    c: TARGETS.c+bonusCarbG,
+    f: TARGETS.f,
+    fi: TARGETS.fi,
+    k: TARGETS.k+bonusKcal,
+    bonusP: bonusProteinG,
+    bonusC: bonusCarbG,
+    bonusK: bonusKcal,
+    activityKcal
+  };
+}
 
 const FREQ_CATS = [
   {key:'pesce',     label:'Pesce',      target:3, color:'#38BDF8', over:false},
@@ -1101,18 +1129,19 @@ function calcTotals(date){
 
 function renderMacros(){
   const tot=calcTotals();
-  const remP=Math.max(0,TARGETS.p-tot.p), remC=Math.max(0,TARGETS.c-tot.c);
-  const remF=Math.max(0,TARGETS.f-tot.f), remFi=Math.max(0,TARGETS.fi-tot.fi);
+  const T=getDynamicTargets(currentDate);
+  const remP=Math.max(0,T.p-tot.p), remC=Math.max(0,T.c-tot.c);
+  const remF=Math.max(0,T.f-tot.f), remFi=Math.max(0,T.fi-tot.fi);
   const fmt=(v,t,rem,id,rid)=>{
     document.getElementById(id).textContent=`${v.toFixed(1)}g`;
     document.getElementById(rid).textContent=v>t+1?`+${(v-t).toFixed(1)}g OVER`:`rem. ${rem.toFixed(1)}g`;
   };
-  fmt(tot.p,TARGETS.p,remP,'tot-p','rem-p');
-  fmt(tot.c,TARGETS.c,remC,'tot-c','rem-c');
-  fmt(tot.f,TARGETS.f,remF,'tot-f','rem-f');
-  fmt(tot.fi,TARGETS.fi,remFi,'tot-fi','rem-fi');
+  fmt(tot.p,T.p,remP,'tot-p','rem-p');
+  fmt(tot.c,T.c,remC,'tot-c','rem-c');
+  fmt(tot.f,T.f,remF,'tot-f','rem-f');
+  fmt(tot.fi,T.fi,remFi,'tot-fi','rem-fi');
   document.getElementById('tot-k').textContent=`${tot.k}`;
-  document.getElementById('rem-k').textContent=tot.k>TARGETS.k?`+${tot.k-TARGETS.k} OVER`:`rem. ${TARGETS.k-tot.k}`;
+  document.getElementById('rem-k').textContent=tot.k>T.k?`+${tot.k-T.k} OVER`:`rem. ${Math.round(T.k-tot.k)}`;
 
   function setBar(id,val,target,cls){
     const pct=Math.min(100,(val/target)*100);
@@ -1120,13 +1149,18 @@ function renderMacros(){
     if(val>target+1) el.classList.add('over');
     else{ el.classList.add(cls); if(pct>=90) el.classList.add(`glow-${cls}`); }
   }
-  setBar('bar-p',tot.p,TARGETS.p,'p'); setBar('bar-c',tot.c,TARGETS.c,'c');
-  setBar('bar-f',tot.f,TARGETS.f,'f'); setBar('bar-fi',tot.fi,TARGETS.fi,'fi');
+  setBar('bar-p',tot.p,T.p,'p'); setBar('bar-c',tot.c,T.c,'c');
+  setBar('bar-f',tot.f,T.f,'f'); setBar('bar-fi',tot.fi,T.fi,'fi');
 
   document.getElementById('sug-p').textContent=remP>0?`${remP.toFixed(1)}g`:'✓';
   document.getElementById('sug-c').textContent=remC>0?`${remC.toFixed(1)}g`:'✓';
   document.getElementById('sug-f').textContent=remF>0?`${remF.toFixed(1)}g`:'✓';
   document.getElementById('sug-fi').textContent=remFi>0?`${remFi.toFixed(1)}g`:'✓';
+
+  const targetLine=document.getElementById('target-line');
+  const bonusLine=document.getElementById('bonus-line');
+  if(targetLine) targetLine.textContent=`Target: ${T.p.toFixed(0)}g P · ${T.c.toFixed(0)}g C · ${T.f.toFixed(0)}g G · ${T.fi.toFixed(0)}g Fib · ~${Math.round(T.k)} kcal`;
+  if(bonusLine) bonusLine.textContent=T.bonusK>0?`⚡ +${T.bonusC.toFixed(0)}g C · +${T.bonusP.toFixed(0)}g P bonus attività (${Math.round(T.activityKcal)} kcal loggate)`:'';
 }
 
 /* ─── CARD TOGGLE ─── */
@@ -1369,7 +1403,7 @@ function addActivity(){
     d.activities.push({type,label:ACT_LABELS[type]||type,kcal,count:1});
   }
   setDayData(d);
-  document.getElementById('act-kcal-input').value=''; renderActivities();
+  document.getElementById('act-kcal-input').value=''; renderActivities(); renderMacros();
 }
 function renderActivities(){
   const d=getDayData(); const acts=d.activities||[];
@@ -1377,7 +1411,7 @@ function renderActivities(){
   acts.forEach((act,idx)=>{ total+=act.kcal; const item=document.createElement('div'); item.className='activity-item'; const countLabel=act.count>1?` ×${act.count}`:''; item.innerHTML=`<span class="act-name">${esc(act.label)}${countLabel}</span><span class="act-kcal">${act.kcal} kcal</span><button class="act-del" onclick="removeActivity(${idx})">×</button>`; log.appendChild(item); });
   document.getElementById('activity-total').textContent=acts.length?`Totale: ${total} kcal (informativo)`:'';
 }
-function removeActivity(idx){ const d=getDayData(); d.activities.splice(idx,1); setDayData(d); renderActivities(); }
+function removeActivity(idx){ const d=getDayData(); d.activities.splice(idx,1); setDayData(d); renderActivities(); renderMacros(); }
 
 /* ─── FREQ ─── */
 const FREQ_MEALS = ['pranzo','cena']; // colazione e spuntini esclusi dalle frequenze
